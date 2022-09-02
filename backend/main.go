@@ -14,6 +14,7 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/channeldb"
 	"github.com/lightningnetwork/lnd/lnrpc/invoicesrpc"
+	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -37,9 +38,20 @@ type Question struct {
 	Title     string
 	Body      string
 	Bounty    uint
+	Paid      bool
+	Hash      string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+// type PendingQuestion struct {
+// 	ID        uint
+// 	Title     string
+// 	Body      string
+// 	Bounty    uint
+// 	CreatedAt time.Time
+// 	UpdatedAt time.Time
+// }
 
 type CreateQuestionInput struct {
 	Title  string `json:"title" binding:"required"`
@@ -159,10 +171,24 @@ func main() {
 			c.AbortWithError(http.StatusBadRequest, err)
 			return
 		}
-		post := Question{Title: input.Title, Body: input.Body, Bounty: input.Bounty}
+
+		// fmt.Printf("Got message with title %s\n", v.Title)
+		// conn.WriteMessage(t, msg)
+		msats := lnwire.MilliSatoshi(input.Bounty * 1000)
+		hash, payaddr, err := lndservs.Client.AddInvoice(c.Request.Context(), &invoicesrpc.AddInvoiceData{Memo: input.Title, Value: msats})
+		if err != nil {
+			log.Fatalf("Error adding invoice: %v\n", err)
+		}
+		fmt.Printf("Invoice added with payment_request: %s\n payment_addr: %x\n", hash.String(), payaddr)
+		// conn.WriteMessage(websocket.TextMessage, []byte(payaddr))
+
+		post := Question{Title: input.Title, Body: input.Body, Bounty: input.Bounty, Paid: false, Hash: hash.String()}
 		result := db.Create(&post)
 		log.Println("ID:", post.ID, ", error:", result.Error, ", rows:", result.RowsAffected)
-		c.JSON(http.StatusOK, gin.H{"message": "pong"})
+		c.JSON(http.StatusOK, gin.H{
+			"payment_request": payaddr,
+			"hash":            hash.String(),
+		})
 	})
 
 	router.POST("/api/answer", func(c *gin.Context) {
@@ -176,6 +202,41 @@ func main() {
 		result := db.Create(&answer)
 		log.Println("ID:", answer.ID, ", error:", result.Error, ", rows:", result.RowsAffected)
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
+	})
+
+	router.GET("/api/waitInvoicePaid", func(c *gin.Context) {
+		parameters := c.Request.URL.Query()
+		hash_str := parameters["hash"][0]
+		hash, err := lntypes.MakeHashFromStr(hash_str)
+		if err != nil {
+			log.Fatalf("Error making hash from string: %v\n", err)
+		}
+		resp, errChan, err := lndservs.Invoices.SubscribeSingleInvoice(c.Request.Context(), hash)
+		if err != nil {
+			log.Fatalf("Error setting up subscribeSingleInvoice stream: %v\n", err)
+		}
+		for {
+			fmt.Printf("Inside channel loop")
+			select {
+			case err := <-errChan:
+				if err != nil {
+					log.Fatalf("Error during subscribeSingleInvoice stream: %v\n", err)
+				}
+			case update := <-resp:
+				state := update.State.String()
+				fmt.Printf("State = %s\n", state)
+				if update.State == channeldb.ContractSettled {
+					// conn.WriteMessage(websocket.TextMessage, []byte("Settled"))
+					c.JSON(http.StatusOK, gin.H{
+						"status": "settled",
+					})
+					return
+				}
+			case <-c.Request.Context().Done():
+				fmt.Printf("Closing channel while in select")
+				return
+			}
+		}
 	})
 
 	router.GET("/api/answers", func(c *gin.Context) {
@@ -222,9 +283,25 @@ func main() {
 		})
 	})
 
+	// router.GET("/api/invoice", func(c *gin.Context) {
+
+	// })
+
 	router.GET("/api/invoice/ws", func(c *gin.Context) {
 		// wshandler(c.Writer, c.Request)
+		fmt.Println("In websocket")
+		// <-c.Request.Context().Done()
+		// fmt.Println("After done signal")
+		ctx := c.Copy()
+
+		// return
 		conn, err := wsupgrader.Upgrade(c.Writer, c.Request, nil)
+		// done := make(chan interface{})
+
+		// conn.SetCloseHandler()
+		// <-c.Request.Context().Done()
+		// fmt.Println("After done signal")
+		// return
 		if err != nil {
 			fmt.Printf("Failed to set websocket upgrade: %+v\n", err)
 			return
@@ -242,35 +319,49 @@ func main() {
 			}
 			err := conn.ReadJSON(&v)
 			if err != nil {
+				log.Fatalf("Error getting json: %v\n", err)
 				break
 			}
 			// fmt.Printf("Got message %v", v)
 			fmt.Printf("Got message with title %s\n", v.Title)
 			// conn.WriteMessage(t, msg)
 			msats := lnwire.MilliSatoshi(v.Bounty * 1000)
-
 			hash, payaddr, err := lndservs.Client.AddInvoice(c.Request.Context(), &invoicesrpc.AddInvoiceData{Memo: v.Title, Value: msats})
-			// &lnrpc.Invoice{Memo: v.Title, Value: v.Bounty})
 			if err != nil {
 				log.Fatalf("Error adding invoice: %v\n", err)
 			}
 			fmt.Printf("Invoice added with payment_request: %s\n payment_addr: %x\n", hash.String(), payaddr)
-			// conn.WriteMessage(websocket.TextMessage, []byte(hash.String()))
 			conn.WriteMessage(websocket.TextMessage, []byte(payaddr))
 
-			resp, _, _ := lndservs.Invoices.SubscribeSingleInvoice(c.Request.Context(), hash)
-			for {
-				update := <-resp
-				state := update.State.String()
-				fmt.Printf("State = %s\n", state)
-				if update.State == channeldb.ContractSettled {
-					conn.WriteMessage(websocket.TextMessage, []byte("Settled"))
-				}
-				if update.State != channeldb.ContractOpen {
-					break
-				}
+			resp, errChan, err := lndservs.Invoices.SubscribeSingleInvoice(c.Request.Context(), hash)
+			if err != nil {
+				log.Fatalf("Error setting up subscribeSingleInvoice stream: %v\n", err)
 			}
+			for {
+				// err := <-errChan
+				// if err != nil {
+				// 	log.Fatalf("Error during subscribeSingleInvoice stream: %v\n", err)
+				// }
+				// update := <-resp
+				fmt.Printf("Inside channel loop")
+				select {
+				case err := <-errChan:
+					if err != nil {
+						log.Fatalf("Error during subscribeSingleInvoice stream: %v\n", err)
+					}
+				case update := <-resp:
+					state := update.State.String()
+					fmt.Printf("State = %s\n", state)
+					if update.State == channeldb.ContractSettled {
+						conn.WriteMessage(websocket.TextMessage, []byte("Settled"))
+						return
+					}
+				case <-ctx.Done():
+					fmt.Printf("Closing channel while in select")
+					return
+				}
 
+			}
 		}
 	})
 

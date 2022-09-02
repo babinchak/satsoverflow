@@ -35,6 +35,10 @@ const Home: NextPage = () => {
   const [questions, setQuestions] = useState<any>([]);
   const [openModal, setOpenModal] = useState(false);
   const [invoiceHash, setInvoiceHash] = useState('');
+  const [controller, setController] = useState<AbortController | null>(null)
+  // const controller = new AbortController()
+  // const controller = useRef
+  // const controller = useRef<AbortController | null>(null);
   const c = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -55,14 +59,21 @@ const Home: NextPage = () => {
         setQuestions(posts)
       })
     }
-    c.current = new WebSocket('ws://localhost:8080/api/invoice/ws')
-    c.current.onmessage = (msg) => {
-      console.log("Received back ", msg.data)
-      setInvoiceHash(msg.data)
-      setOpenModal(true)
-    }
     fetchData()
-
+    setController(new AbortController())
+    // c.current = new WebSocket('ws://localhost:8080/api/invoice/ws')
+    // c.current.onmessage = (msg) => {
+    //   console.log("Received back ", msg.data)
+    //   setInvoiceHash(msg.data)
+    //   setOpenModal(true)
+    //   if (c.current != null) {
+    //     c.current.onmessage = (msg) => {
+    //       if (msg.data == "Settled") {
+    //         console.log("Settled!")
+    //       }
+    //     }
+    //   }
+    // }
   }, [])
 
   async function submitQuestion() {
@@ -73,21 +84,44 @@ const Home: NextPage = () => {
       "bounty": parseInt(questionSats)
     }
     console.log(JSON.stringify(body))
-    if (c.current != null) {
-      c.current.send(JSON.stringify(body))
-    }
-    // const response = await fetch('/api/question', {
-    //   method: 'POST',
-    //   headers: {
-    //     // Accept: 'application.json',
-    //     'Content-Type': 'application/json'
-    //   },
-    //   body: JSON.stringify(body)
-    // })
+    // if (c.current != null) {
+    //   c.current.send(JSON.stringify(body))
+    // }
+    const response = await fetch('/api/question', {
+      method: 'POST',
+      headers: {
+        // Accept: 'application.json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
     // console.log(response.json())
+    response.json().then((data) => {
+      console.log("payrequest: ", data.payment_request)
+      setInvoiceHash(data.payment_request)
+      setOpenModal(true)
+      waitInvoicePaid(data.hash)
+    })
   }
 
+  async function waitInvoicePaid(hash: string) {
+    if (controller == null) return
+    const response = await fetch('/api/waitInvoicePaid?' + new URLSearchParams({ hash: hash }), {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal
+    })
+    response.json().then((data) => {
+      console.log("status: ", data.status)
+      window.location.reload()
+    })
+  }
 
+  function abortInvoice() {
+    if (controller != null) {
+      controller.abort()
+    }
+  }
 
   const handleTitle = (event: React.ChangeEvent<HTMLInputElement>) => {
     // console.log("Changing to ", event.target.value)
@@ -106,7 +140,7 @@ const Home: NextPage = () => {
   return (
     <>
 
-      {openModal && <Modal hash={invoiceHash} setCloseModal={setOpenModal} />}
+      {openModal && <Modal hash={invoiceHash} setCloseModal={setOpenModal} setCloseController={abortInvoice} />}
       {/* <div className="w-2/5 mx-auto">
         <div className="text-slate-700">stay humble</div>
         <div className="text-slate-700">stack <span className="text-white">sats</span></div>
@@ -138,7 +172,6 @@ const Home: NextPage = () => {
             questions.map((post: any) => <QuestionLink key={post.id} title={post.title} bounty={post.bounty} page_id={post.id}></QuestionLink>)
           }
         </div>
-
       </div>
 
     </>
