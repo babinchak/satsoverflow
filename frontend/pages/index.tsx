@@ -105,7 +105,8 @@ const Home: NextPage = () => {
 
   return (
     <>
-      <Modal hash={invoiceHash} open={openModal} />
+
+      {openModal && <Modal hash={invoiceHash} setCloseModal={setOpenModal} />}
       <div>Stay humble.</div>
       <div>Stack Sats.</div>
       <div className="border-white border-2 border-dashed w-3/5 min-w-min flex flex-col mx-auto mt-56">
