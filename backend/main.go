@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -13,7 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/lightninglabs/lndclient"
-	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/channeldb"
+	"github.com/lightningnetwork/lnd/lnrpc/invoicesrpc"
+	"github.com/lightningnetwork/lnd/lnwire"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -95,6 +96,9 @@ var wsupgrader = websocket.Upgrader{
 // 		conn.WriteMessage(t, msg)
 // 	}
 // }
+// type MacaroonC struct {
+
+// }
 
 func main() {
 	dsn := "host=localhost user=postgres password=dogsandcats123 dbname=postgres port=5432 sslmode=disable TimeZone=Asia/Shanghai"
@@ -103,9 +107,48 @@ func main() {
 		log.Fatalf("Yay")
 	}
 	db.AutoMigrate(&User{}, &Question{}, &Answer{})
-	client, err := lndclient.NewBasicClient("192.168.68.54:10009", "invoicer/tls.cert", "invoicer", "mainnet")
+	// var opts []grpc.DialOption
+
+	// tls_creds, err := credentials.NewClientTLSFromFile("invoicer/tls.cert", "localhost")
+	// if err != nil {
+	// 	log.Fatalf("Error getting tls creds: %v\n", err)
+	// }
+	// opts = append(opts, grpc.WithTransportCredentials(tls_creds))
+
+	// macBytes, err := ioutil.ReadFile("invoices/admin.macaroon")
+	// if err != nil {
+	// 	log.Fatalf("Error loading macaroon file: %v\n", err)
+	// }
+
+	// func metadata_callback(ctx context.Context, uri ...string) (map[string]string, error) {
+
+	// }
+	// mac_creds := credentials.PerRPCCredentials{}
+
+	// conn, err := grpc.Dial("192.168.68.54:10009", opts...)
+	// if err != nil {
+	// 	log.Fatalf("fail to dial: %v", err)
+	// }
+	// defer conn.Close()
+	// client := pb.NewLightningClient()
+	// lightning_client, err := lndclient.NewBasicClient("192.168.68.54:10009", "invoicer/tls.cert", "invoicer", "mainnet")
+	// if err != nil {
+	// 	log.Fatalf("Error setting up client: %v\n", err)
+	// }
+	// invoice_client, err := lndclient.NewInvoicesClient("192.168.68.54:10009", "invoicer/tls.cert", "invoicer", "mainnet")
+	// if err != nil {
+	// 	log.Fatalf("Error setting up client: %v\n", err)
+	// }
+	lndcfg := lndclient.LndServicesConfig{
+		LndAddress:  "192.168.68.54:10009",
+		Network:     "mainnet",
+		MacaroonDir: "invoicer",
+		TLSPath:     "invoicer/tls.cert",
+	}
+
+	lndservs, err := lndclient.NewLndServices(&lndcfg)
 	if err != nil {
-		log.Fatalf("Error setting up client: %v\n", err)
+		log.Fatalf("Error getting lnd grpc services: %v\n", err)
 	}
 
 	router := gin.Default()
@@ -187,13 +230,14 @@ func main() {
 			return
 		}
 		defer conn.Close()
+		defer fmt.Println("Closing websocket connection")
 
 		for {
 			// _, msg, err := conn.ReadMessage()
 
 			var v struct {
 				Body   string `json:"body"`
-				Bounty int64  `json:"bounty"`
+				Bounty uint64 `json:"bounty"`
 				Title  string `json:"title"`
 			}
 			err := conn.ReadJSON(&v)
@@ -203,12 +247,30 @@ func main() {
 			// fmt.Printf("Got message %v", v)
 			fmt.Printf("Got message with title %s\n", v.Title)
 			// conn.WriteMessage(t, msg)
-			resp, err := client.AddInvoice(context.Background(), &lnrpc.Invoice{Memo: v.Title, Value: v.Bounty})
+			msats := lnwire.MilliSatoshi(v.Bounty * 1000)
+
+			hash, payaddr, err := lndservs.Client.AddInvoice(c.Request.Context(), &invoicesrpc.AddInvoiceData{Memo: v.Title, Value: msats})
+			// &lnrpc.Invoice{Memo: v.Title, Value: v.Bounty})
 			if err != nil {
 				log.Fatalf("Error adding invoice: %v\n", err)
 			}
-			fmt.Printf("Invoice added with payment_request: %s\n payment_addr: %x\n", resp.PaymentRequest, resp.PaymentAddr)
-			conn.WriteMessage(websocket.TextMessage, []byte(resp.PaymentRequest))
+			fmt.Printf("Invoice added with payment_request: %s\n payment_addr: %x\n", hash.String(), payaddr)
+			// conn.WriteMessage(websocket.TextMessage, []byte(hash.String()))
+			conn.WriteMessage(websocket.TextMessage, []byte(payaddr))
+
+			resp, _, _ := lndservs.Invoices.SubscribeSingleInvoice(c.Request.Context(), hash)
+			for {
+				update := <-resp
+				state := update.State.String()
+				fmt.Printf("State = %s\n", state)
+				if update.State == channeldb.ContractSettled {
+					conn.WriteMessage(websocket.TextMessage, []byte("Settled"))
+				}
+				if update.State != channeldb.ContractOpen {
+					break
+				}
+			}
+
 		}
 	})
 
