@@ -1,0 +1,29 @@
+version: '3.1'
+services:
+  db:
+    image: postgres
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: dogsandcats123
+      POSTGRES_USER: postgres
+    ports:
+      - "5432:5432" # default postgres port
+    volumes:
+      - db:/var/lib/postgresql/data
+  
+  # lnd:
+  #   image: lightninglabs/lnd:v0.15.1-beta
+  #   container_name: lnd
+  #   volumes:
+  #     - lnd-db:/root/.lnd
+  #   command: [--bitcoin.active, --bitcoin.testnet, --bitcoin.node=neutrino, --neutrino.connect=faucet.lightning.community]
+  #   ports:
+  #     - "10009:10009" # default gRPC port for lnd
+
+volumes:
+  db:
+    driver: local
+  lnd-db:
+    driver: local
+    
