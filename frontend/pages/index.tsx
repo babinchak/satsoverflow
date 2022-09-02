@@ -107,9 +107,14 @@ const Home: NextPage = () => {
     <>
 
       {openModal && <Modal hash={invoiceHash} setCloseModal={setOpenModal} />}
-      <div>Stay humble.</div>
-      <div>Stack Sats.</div>
-      <div className="border-white border-2 border-dashed w-3/5 min-w-min flex flex-col mx-auto mt-56">
+      {/* <div className="w-2/5 mx-auto">
+        <div className="text-slate-700">stay humble</div>
+        <div className="text-slate-700">stack <span className="text-white">sats</span></div>
+        <div className="text-white">overflow</div>
+      </div> */}
+
+      <div className="border-white border-2 border-dashed w-3/5 min-w-min flex flex-col mx-auto mt-16">
+        <Image src="/shss.svg" height={300} width={600} />
         <div>Get your question answered. Lightning Fast.</div>
         <div className="flex flex-nowrap border-red-900 border-2">
           <input type="text" onChange={handleTitle} placeholder="How do I escape vim?" className="basis-2/3 border-2 mr-1 rounded-lg h-12 text-xl"></input>
