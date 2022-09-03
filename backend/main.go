@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -19,6 +20,8 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+const INVOICE_EXPIRY_SECS = 600
 
 type User struct {
 	ID           uint
@@ -99,6 +102,43 @@ var wsupgrader = websocket.Upgrader{
 // 		return
 // 	}
 
+// subscribeInvoicesDaemon gets notified of invoice state updates by the lnd
+// client, and sets the questions associated with newly settled invoices to be
+// paid.  Only questions that are paid for show up on the website.
+func subscribeInvoicesDaemon(client lndclient.LightningClient, db *gorm.DB) {
+	invoices, errs, err := client.SubscribeInvoices(context.Background(), lndclient.InvoiceSubscriptionRequest{})
+	if err != nil {
+		log.Fatalf("Error setting up subscribe invoices stream: %v\n", err)
+	}
+	for {
+		select {
+		case invoice := <-invoices:
+			fmt.Printf("Invoice state: %s\nInvoice memo: %s\n", invoice.State.String(), invoice.Memo)
+			if invoice.State == channeldb.ContractSettled {
+				hash := invoice.Hash.String()
+				db.Model(&Question{}).Where("hash = ?", hash).Update("paid", true)
+			}
+		case err := <-errs:
+			fmt.Printf("Error in subscribe invoices stream: %v\n", err)
+		}
+	}
+}
+
+func deleteExpiredInvoicesDaemon(db *gorm.DB) {
+	var Questions []Question
+	for {
+		now := time.Now()
+		then := now.Add(-time.Minute * 10)
+		fmt.Printf("then is %s\n", time.Time.String(then))
+		fmt.Printf("now is %s\n", time.Time.String(now))
+		db.Where("paid = ? AND created_at < ?", false, then).Find(&Questions)
+		for _, q := range Questions {
+			fmt.Printf("ID = %d, Title = %s, Created = %s\n", q.ID, q.Title, time.Time.String(q.CreatedAt))
+		}
+		time.Sleep(15 * time.Minute)
+	}
+}
+
 // 	for {
 // 		t, msg, err := conn.ReadMessage()
 // 		if err != nil {
@@ -162,6 +202,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error getting lnd grpc services: %v\n", err)
 	}
+	go subscribeInvoicesDaemon(lndservs.Client, db)
+	go deleteExpiredInvoicesDaemon(db)
 
 	router := gin.Default()
 	router.POST("/api/question", func(c *gin.Context) {
@@ -175,7 +217,7 @@ func main() {
 		// fmt.Printf("Got message with title %s\n", v.Title)
 		// conn.WriteMessage(t, msg)
 		msats := lnwire.MilliSatoshi(input.Bounty * 1000)
-		hash, payaddr, err := lndservs.Client.AddInvoice(c.Request.Context(), &invoicesrpc.AddInvoiceData{Memo: input.Title, Value: msats})
+		hash, payaddr, err := lndservs.Client.AddInvoice(c.Request.Context(), &invoicesrpc.AddInvoiceData{Memo: input.Title, Value: msats, Expiry: INVOICE_EXPIRY_SECS})
 		if err != nil {
 			log.Fatalf("Error adding invoice: %v\n", err)
 		}
@@ -256,7 +298,7 @@ func main() {
 
 	router.GET("/api/questions", func(c *gin.Context) {
 		var Questions []Question
-		db.Order("id desc").Limit(10).Find(&Questions)
+		db.Where("paid = ?", true).Order("id desc").Limit(10).Find(&Questions)
 		messages := make([]map[string]interface{}, len(Questions))
 		for i, post := range Questions {
 			fmt.Printf("ID %d, title = %s\n", post.ID, post.Title)
@@ -273,7 +315,13 @@ func main() {
 		id := parameters["id"][0]
 		fmt.Printf("id: %s\n", id)
 		var q Question
-		db.Where("id = ?", id).First(&q)
+		res := db.Where("id = ?", id).First(&q)
+		// fmt.Printf("res err = %v\n", res.Error)
+		// fmt.Printf("id = %d, Title = %s\n", q.ID, q.Title)
+		if res.Error != nil || q.Paid == false {
+			c.Status(http.StatusNotFound)
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"title":    q.Title,
 			"body":     q.Body,
@@ -287,83 +335,83 @@ func main() {
 
 	// })
 
-	router.GET("/api/invoice/ws", func(c *gin.Context) {
-		// wshandler(c.Writer, c.Request)
-		fmt.Println("In websocket")
-		// <-c.Request.Context().Done()
-		// fmt.Println("After done signal")
-		ctx := c.Copy()
+	// router.GET("/api/invoice/ws", func(c *gin.Context) {
+	// 	// wshandler(c.Writer, c.Request)
+	// 	fmt.Println("In websocket")
+	// 	// <-c.Request.Context().Done()
+	// 	// fmt.Println("After done signal")
+	// 	ctx := c.Copy()
 
-		// return
-		conn, err := wsupgrader.Upgrade(c.Writer, c.Request, nil)
-		// done := make(chan interface{})
+	// 	// return
+	// 	conn, err := wsupgrader.Upgrade(c.Writer, c.Request, nil)
+	// 	// done := make(chan interface{})
 
-		// conn.SetCloseHandler()
-		// <-c.Request.Context().Done()
-		// fmt.Println("After done signal")
-		// return
-		if err != nil {
-			fmt.Printf("Failed to set websocket upgrade: %+v\n", err)
-			return
-		}
-		defer conn.Close()
-		defer fmt.Println("Closing websocket connection")
+	// 	// conn.SetCloseHandler()
+	// 	// <-c.Request.Context().Done()
+	// 	// fmt.Println("After done signal")
+	// 	// return
+	// 	if err != nil {
+	// 		fmt.Printf("Failed to set websocket upgrade: %+v\n", err)
+	// 		return
+	// 	}
+	// 	defer conn.Close()
+	// 	defer fmt.Println("Closing websocket connection")
 
-		for {
-			// _, msg, err := conn.ReadMessage()
+	// 	for {
+	// 		// _, msg, err := conn.ReadMessage()
 
-			var v struct {
-				Body   string `json:"body"`
-				Bounty uint64 `json:"bounty"`
-				Title  string `json:"title"`
-			}
-			err := conn.ReadJSON(&v)
-			if err != nil {
-				log.Fatalf("Error getting json: %v\n", err)
-				break
-			}
-			// fmt.Printf("Got message %v", v)
-			fmt.Printf("Got message with title %s\n", v.Title)
-			// conn.WriteMessage(t, msg)
-			msats := lnwire.MilliSatoshi(v.Bounty * 1000)
-			hash, payaddr, err := lndservs.Client.AddInvoice(c.Request.Context(), &invoicesrpc.AddInvoiceData{Memo: v.Title, Value: msats})
-			if err != nil {
-				log.Fatalf("Error adding invoice: %v\n", err)
-			}
-			fmt.Printf("Invoice added with payment_request: %s\n payment_addr: %x\n", hash.String(), payaddr)
-			conn.WriteMessage(websocket.TextMessage, []byte(payaddr))
+	// 		var v struct {
+	// 			Body   string `json:"body"`
+	// 			Bounty uint64 `json:"bounty"`
+	// 			Title  string `json:"title"`
+	// 		}
+	// 		err := conn.ReadJSON(&v)
+	// 		if err != nil {
+	// 			log.Fatalf("Error getting json: %v\n", err)
+	// 			break
+	// 		}
+	// 		// fmt.Printf("Got message %v", v)
+	// 		fmt.Printf("Got message with title %s\n", v.Title)
+	// 		// conn.WriteMessage(t, msg)
+	// 		msats := lnwire.MilliSatoshi(v.Bounty * 1000)
+	// 		hash, payaddr, err := lndservs.Client.AddInvoice(c.Request.Context(), &invoicesrpc.AddInvoiceData{Memo: v.Title, Value: msats})
+	// 		if err != nil {
+	// 			log.Fatalf("Error adding invoice: %v\n", err)
+	// 		}
+	// 		fmt.Printf("Invoice added with payment_request: %s\n payment_addr: %x\n", hash.String(), payaddr)
+	// 		conn.WriteMessage(websocket.TextMessage, []byte(payaddr))
 
-			resp, errChan, err := lndservs.Invoices.SubscribeSingleInvoice(c.Request.Context(), hash)
-			if err != nil {
-				log.Fatalf("Error setting up subscribeSingleInvoice stream: %v\n", err)
-			}
-			for {
-				// err := <-errChan
-				// if err != nil {
-				// 	log.Fatalf("Error during subscribeSingleInvoice stream: %v\n", err)
-				// }
-				// update := <-resp
-				fmt.Printf("Inside channel loop")
-				select {
-				case err := <-errChan:
-					if err != nil {
-						log.Fatalf("Error during subscribeSingleInvoice stream: %v\n", err)
-					}
-				case update := <-resp:
-					state := update.State.String()
-					fmt.Printf("State = %s\n", state)
-					if update.State == channeldb.ContractSettled {
-						conn.WriteMessage(websocket.TextMessage, []byte("Settled"))
-						return
-					}
-				case <-ctx.Done():
-					fmt.Printf("Closing channel while in select")
-					return
-				}
+	// 		resp, errChan, err := lndservs.Invoices.SubscribeSingleInvoice(c.Request.Context(), hash)
+	// 		if err != nil {
+	// 			log.Fatalf("Error setting up subscribeSingleInvoice stream: %v\n", err)
+	// 		}
+	// 		for {
+	// 			// err := <-errChan
+	// 			// if err != nil {
+	// 			// 	log.Fatalf("Error during subscribeSingleInvoice stream: %v\n", err)
+	// 			// }
+	// 			// update := <-resp
+	// 			fmt.Printf("Inside channel loop")
+	// 			select {
+	// 			case err := <-errChan:
+	// 				if err != nil {
+	// 					log.Fatalf("Error during subscribeSingleInvoice stream: %v\n", err)
+	// 				}
+	// 			case update := <-resp:
+	// 				state := update.State.String()
+	// 				fmt.Printf("State = %s\n", state)
+	// 				if update.State == channeldb.ContractSettled {
+	// 					conn.WriteMessage(websocket.TextMessage, []byte("Settled"))
+	// 					return
+	// 				}
+	// 			case <-ctx.Done():
+	// 				fmt.Printf("Closing channel while in select")
+	// 				return
+	// 			}
 
-			}
-		}
-	})
+	// 		}
+	// 	}
+	// })
 
 	// Route every path not hitting api to nextjs
 	router.NoRoute(ReverseProxy)

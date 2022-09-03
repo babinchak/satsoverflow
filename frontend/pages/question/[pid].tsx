@@ -46,7 +46,6 @@ export default function Question() {
     const [created, setCreated] = useState('')
     const [answerBody, setAnswerBody] = useState('')
     const [answers, setAnswers] = useState<any>([]);
-    const [qr, setQr] = useState('1234');
     const router = useRouter()
     const { pid } = router.query
 
@@ -62,14 +61,18 @@ export default function Question() {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' },
             })
-            response.json().then((data) => {
-                setTitle(data.title)
-                setBody(data.body)
-                setBounty(data.bounty)
-                const time = Date.parse(data.created)
-                const timeElapsed = timeSince(time)
-                setCreated(timeElapsed)
-            })
+            if (response.ok) {
+                response.json().then((data) => {
+                    setTitle(data.title)
+                    setBody(data.body)
+                    setBounty(data.bounty)
+                    const time = Date.parse(data.created)
+                    const timeElapsed = timeSince(time)
+                    setCreated(timeElapsed)
+                })
+            } else {
+                window.location.href = '/'
+            }
         }
 
 
@@ -132,8 +135,6 @@ export default function Question() {
                         answers.map((answer: any) => <Answer key={answer.body} body={answer.body}></Answer>)
                     }
                 </div>
-                <QRCodeSVG value={qr} className="w-3/5 h-3/5" />
-                <input onChange={(e) => { setQr(e.target.value) }}></input>
             </div>
         </>
     )
