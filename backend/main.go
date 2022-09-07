@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"net/url"
 	"time"
 
+	"example.com/satsoverflow-backend/models"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/lightninglabs/lndclient"
@@ -23,29 +23,29 @@ import (
 
 const INVOICE_EXPIRY_SECS = 600
 
-type User struct {
-	ID           uint
-	Name         string
-	Email        *string
-	Age          uint8
-	Birthday     time.Time
-	MemberNumber sql.NullString
-	ActivatedAt  sql.NullTime
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-}
+// type User struct {
+// 	ID           uint
+// 	Name         string
+// 	Email        *string
+// 	Age          uint8
+// 	Birthday     time.Time
+// 	MemberNumber sql.NullString
+// 	ActivatedAt  sql.NullTime
+// 	CreatedAt    time.Time
+// 	UpdatedAt    time.Time
+// }
 
-type Question struct {
-	ID uint
-	// Hash      string
-	Title     string
-	Body      string
-	Bounty    uint
-	Paid      bool
-	Hash      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
+// type Question struct {
+// 	ID uint
+// 	// Hash      string
+// 	Title     string
+// 	Body      string
+// 	Bounty    uint
+// 	Paid      bool
+// 	Hash      string
+// 	CreatedAt time.Time
+// 	UpdatedAt time.Time
+// }
 
 // type PendingQuestion struct {
 // 	ID        uint
@@ -62,14 +62,14 @@ type CreateQuestionInput struct {
 	Bounty uint   `json:"bounty"`
 }
 
-type Answer struct {
-	ID         uint
-	Body       string
-	Bounty     uint
-	QuestionID uint
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-}
+// type Answer struct {
+// 	ID         uint
+// 	Body       string
+// 	Bounty     uint
+// 	QuestionID uint
+// 	CreatedAt  time.Time
+// 	UpdatedAt  time.Time
+// }
 
 type CreateAnswerInput struct {
 	Body       string `json:"body" binding:"required"`
@@ -116,7 +116,7 @@ func subscribeInvoicesDaemon(client lndclient.LightningClient, db *gorm.DB) {
 			fmt.Printf("Invoice state: %s\nInvoice memo: %s\n", invoice.State.String(), invoice.Memo)
 			if invoice.State == channeldb.ContractSettled {
 				hash := invoice.Hash.String()
-				db.Model(&Question{}).Where("hash = ?", hash).Update("paid", true)
+				db.Model(&models.Question{}).Where("hash = ?", hash).Update("paid", true)
 			}
 		case err := <-errs:
 			fmt.Printf("Error in subscribe invoices stream: %v\n", err)
@@ -125,7 +125,7 @@ func subscribeInvoicesDaemon(client lndclient.LightningClient, db *gorm.DB) {
 }
 
 func deleteExpiredInvoicesDaemon(db *gorm.DB) {
-	var Questions []Question
+	var Questions []models.Question
 	for {
 		now := time.Now()
 		then := now.Add(-time.Minute * 10)
@@ -158,7 +158,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Yay")
 	}
-	db.AutoMigrate(&User{}, &Question{}, &Answer{})
+	db.AutoMigrate(&models.User{}, &models.Question{}, &models.Answer{})
 	// var opts []grpc.DialOption
 
 	// tls_creds, err := credentials.NewClientTLSFromFile("invoicer/tls.cert", "localhost")
@@ -224,7 +224,7 @@ func main() {
 		fmt.Printf("Invoice added with payment_request: %s\n payment_addr: %x\n", hash.String(), payaddr)
 		// conn.WriteMessage(websocket.TextMessage, []byte(payaddr))
 
-		post := Question{Title: input.Title, Body: input.Body, Bounty: input.Bounty, Paid: false, Hash: hash.String()}
+		post := models.Question{Title: input.Title, Body: input.Body, Bounty: input.Bounty, Paid: false, Hash: hash.String()}
 		result := db.Create(&post)
 		log.Println("ID:", post.ID, ", error:", result.Error, ", rows:", result.RowsAffected)
 		c.JSON(http.StatusOK, gin.H{
@@ -240,7 +240,7 @@ func main() {
 			c.AbortWithError(http.StatusBadRequest, err)
 			return
 		}
-		answer := Answer{Body: input.Body, QuestionID: input.QuestionID}
+		answer := models.Answer{Body: input.Body, QuestionID: input.QuestionID}
 		result := db.Create(&answer)
 		log.Println("ID:", answer.ID, ", error:", result.Error, ", rows:", result.RowsAffected)
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
@@ -282,7 +282,7 @@ func main() {
 	})
 
 	router.GET("/api/answers", func(c *gin.Context) {
-		var Answers []Answer
+		var Answers []models.Answer
 		parameters := c.Request.URL.Query()
 		id := parameters["question_id"][0]
 		db.Where("question_id = ?", id).Order("id desc").Limit(5).Find(&Answers)
@@ -297,7 +297,7 @@ func main() {
 	})
 
 	router.GET("/api/questions", func(c *gin.Context) {
-		var Questions []Question
+		var Questions []models.Question
 		db.Where("paid = ?", true).Order("id desc").Limit(10).Find(&Questions)
 		messages := make([]map[string]interface{}, len(Questions))
 		for i, post := range Questions {
@@ -314,7 +314,7 @@ func main() {
 		parameters := c.Request.URL.Query()
 		id := parameters["id"][0]
 		fmt.Printf("id: %s\n", id)
-		var q Question
+		var q models.Question
 		res := db.Where("id = ?", id).First(&q)
 		// fmt.Printf("res err = %v\n", res.Error)
 		// fmt.Printf("id = %d, Title = %s\n", q.ID, q.Title)
