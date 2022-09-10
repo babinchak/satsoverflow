@@ -69,8 +69,20 @@ func (server *Server) AddQuestion(c *gin.Context) {
 	}
 	fmt.Printf("Invoice added with payment_request: %s\n payment_addr: %x\n", hash.String(), payaddr)
 	// conn.WriteMessage(websocket.TextMessage, []byte(payaddr))
+	session, err := server.Store.Get(c.Request, "sessionID")
+	if err != nil {
+		log.Fatalf("Error getting session: %v\n", err)
+	}
 
-	post := models.Question{Title: input.Title, Body: input.Body, Bounty: input.Bounty, Paid: false, Hash: hash.String()}
+	username, found := session.Values["username"].(string)
+	var inputUsername *string
+	if found {
+		inputUsername = &username
+	} else {
+		inputUsername = nil
+	}
+
+	post := models.Question{Title: input.Title, Body: input.Body, Bounty: input.Bounty, Paid: false, Hash: hash.String(), AskerName: inputUsername}
 	result := server.DB.Create(&post)
 	log.Println("ID:", post.ID, ", error:", result.Error, ", rows:", result.RowsAffected)
 	c.JSON(http.StatusOK, gin.H{

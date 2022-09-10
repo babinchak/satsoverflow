@@ -4,7 +4,7 @@ import { useState } from "react"
 
 
 export default function Login() {
-    const [email, setEmail] = useState('')
+    const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
     const router = useRouter();
 
@@ -13,7 +13,7 @@ export default function Login() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                'email': email,
+                'username': username,
                 'password': password
             })
         })
@@ -26,8 +26,8 @@ export default function Login() {
     return (
         <>
             <div>
-                <label>Email:</label>
-                <input onChange={(e) => setEmail(e.target.value)} />
+                <label>Username:</label>
+                <input onChange={(e) => setUsername(e.target.value)} />
                 <label>Password:</label>
                 <input onChange={(e) => setPassword(e.target.value)} />
                 <button onClick={submitLogin}>Submit</button>

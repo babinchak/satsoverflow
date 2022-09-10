@@ -19,9 +19,9 @@ import (
 )
 
 type Server struct {
-	DB          *gorm.DB
-	Store       *redistore.RediStore
-	LndServices *lndclient.GrpcLndServices
+	DB          *gorm.DB                   // Object-relational mapper (ORM) for Postgres
+	Store       *redistore.RediStore       // Session store using Redis
+	LndServices *lndclient.GrpcLndServices // Access gRPC endpoint for LND node
 	Router      *gin.Engine
 }
 

@@ -3,6 +3,7 @@ import { useRouter } from "next/router"
 import { StatusCodes } from "http-status-codes"
 
 export default function Register() {
+    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const router = useRouter();
@@ -12,6 +13,7 @@ export default function Register() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                'username': username,
                 'email': email,
                 'password': password
             })
@@ -25,6 +27,8 @@ export default function Register() {
     return (
         <>
             <div>
+                <label>Username:</label>
+                <input onChange={(e) => setUsername(e.target.value)} />
                 <label>Email:</label>
                 <input onChange={(e) => setEmail(e.target.value)} />
                 <label>Password:</label>

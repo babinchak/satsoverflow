@@ -7,11 +7,10 @@ import (
 
 type User struct {
 	ID           uint
-	Username     string
+	Username     string `gorm:"primaryKey"`
 	Email        string
 	Age          uint8
 	Password     string
-	Birthday     time.Time
 	MemberNumber sql.NullString
 	ActivatedAt  sql.NullTime
 	CreatedAt    time.Time

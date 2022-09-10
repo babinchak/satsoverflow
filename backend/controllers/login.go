@@ -12,6 +12,7 @@ import (
 
 func (server *Server) Register(c *gin.Context) {
 	type RegisterInput struct {
+		Username string `json:"username" binding:"required"`
 		Email    string `json:"email" binding:"required"`
 		Password string `json:"password" binding:"required"`
 	}
@@ -26,7 +27,7 @@ func (server *Server) Register(c *gin.Context) {
 	fmt.Printf("Email = %s\n", input.Email)
 	bytes, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 14)
 
-	newUser := models.User{Email: input.Email, Password: string(bytes)}
+	newUser := models.User{Username: input.Username, Email: input.Email, Password: string(bytes)}
 	result := server.DB.Create(&newUser)
 	log.Println("Error:", result.Error, ", rows:", result.RowsAffected)
 	// session, err := store.Get(c.Request, "sessionID")
@@ -44,7 +45,7 @@ func (server *Server) Register(c *gin.Context) {
 
 func (server *Server) Login(c *gin.Context) {
 	type LoginInput struct {
-		Email    string `json:"email" binding:"required"`
+		Username string `json:"username" binding:"required"`
 		Password string `json:"password" binding:"required"`
 	}
 	input := LoginInput{}
@@ -63,11 +64,11 @@ func (server *Server) Login(c *gin.Context) {
 	// password := c.Query("password")
 
 	var user models.User
-	res := server.DB.Where("email = ?", input.Email).First(&user)
+	res := server.DB.Where("username = ?", input.Username).First(&user)
 	fmt.Printf("Rows: %d\n", res.RowsAffected)
 	if res.Error != nil {
 		// log.Fatalf("Error querying user by email: %v\n", res.Error)
-		c.String(http.StatusInternalServerError, fmt.Sprintf("Error querying user by email: %v", res.Error))
+		c.String(http.StatusInternalServerError, fmt.Sprintf("Error querying user by username: %v", res.Error))
 		return
 		// c.AbortWithStatus(http.StatusInternalServerError)
 	}
@@ -83,7 +84,7 @@ func (server *Server) Login(c *gin.Context) {
 		log.Fatalf("Error getting session: %v\n", err)
 	}
 	// session.Values["Foo"] = "bar"
-	session.Values["email"] = input.Email
+	session.Values["username"] = input.Username
 	session.Options.HttpOnly = true
 	session.Options.MaxAge = 7 * 24 * 60 * 60 // expires in 7 days
 	// session.Options.Secure = true
