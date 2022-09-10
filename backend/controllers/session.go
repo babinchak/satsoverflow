@@ -17,7 +17,8 @@ func (server *Server) GetSessionDetails(c *gin.Context) {
 	username, found := session.Values["username"]
 	if !found {
 		fmt.Printf("Not found\n")
-		c.AbortWithStatus(http.StatusNotFound)
+		// c.AbortWithStatus(http.StatusNotFound)
+		c.Status(http.StatusNotFound)
 		return
 	}
 	var user models.User

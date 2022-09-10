@@ -103,12 +103,20 @@ func (server *Server) GetQuestion(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
+	var hasAsker bool
+	if q.AskerName == nil {
+		hasAsker = false
+	} else {
+		hasAsker = true
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"title":    q.Title,
 		"body":     q.Body,
 		"bounty":   q.Bounty,
 		"created":  q.CreatedAt,
 		"modified": q.UpdatedAt,
+		"hasAsker": hasAsker,
+		"asker":    q.AskerName,
 	})
 }
 

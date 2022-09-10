@@ -5,6 +5,7 @@ import Link from 'next/link'
 import React from 'react'
 import { useState, useEffect, useRef } from 'react'
 import Modal from '../components/Modal'
+import Navbar from '../components/Navbar'
 // import styles from '../styles/Home.module.css'
 
 // export async function getServerSideProps() {
@@ -139,7 +140,7 @@ const Home: NextPage = () => {
 
   return (
     <>
-
+      <Navbar />
       {openModal && <Modal hash={invoiceHash} setCloseModal={setOpenModal} setCloseController={abortInvoice} />}
       {/* <div className="w-2/5 mx-auto">
         <div className="text-slate-700">stay humble</div>

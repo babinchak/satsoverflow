@@ -3,6 +3,7 @@ package controllers
 func (s *Server) initializeRoutes() {
 	s.Router.POST("/api/register", s.Register)
 	s.Router.POST("/api/login", s.Login)
+	s.Router.POST("/api/logout", s.Logout)
 
 	s.Router.POST("/api/answer", s.AddAnswer)
 	s.Router.GET("/api/answers", s.ListAnswers)

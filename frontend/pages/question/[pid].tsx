@@ -1,6 +1,7 @@
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
+import Navbar from '../../components/Navbar';
 
 function timeSince(date: number) {
     const now = Date.now()
@@ -36,6 +37,7 @@ function Answer({ body }: { body: string }) {
         <div>
             {body}
         </div>
+
     )
 }
 
@@ -44,6 +46,8 @@ export default function Question() {
     const [body, setBody] = useState('')
     const [bounty, setBounty] = useState(0)
     const [created, setCreated] = useState('')
+    const [asker, setAsker] = useState('')
+    const [hasAsker, setHasAsker] = useState(false)
     const [answerBody, setAnswerBody] = useState('')
     const [answers, setAnswers] = useState<any>([]);
     const router = useRouter()
@@ -66,6 +70,9 @@ export default function Question() {
                     setTitle(data.title)
                     setBody(data.body)
                     setBounty(data.bounty)
+                    setAsker(data.asker)
+                    setHasAsker(data.hasAsker)
+                    console.log("hasasker = ", data.hasAsker)
                     const time = Date.parse(data.created)
                     const timeElapsed = timeSince(time)
                     setCreated(timeElapsed)
@@ -119,11 +126,14 @@ export default function Question() {
 
     return (
         <>
+            <Navbar />
             <div className="mx-auto border-white border-2 w-3/5 min-w-min flex flex-col mt-16">
                 <div className="text-3xl">{title}</div>
                 <div className="flex flex-row gap-x-16">
                     <span>{created} ago</span>
                     <span className="flex">Bounty: {bounty} sats</span>
+                    <span>{hasAsker.toString()}</span>
+                    <span>{asker}</span>
                 </div>
                 <div className="text-lg">{body}</div>
                 <div>Answer:</div>

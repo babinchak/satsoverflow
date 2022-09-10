@@ -1,6 +1,7 @@
 import { StatusCodes } from "http-status-codes";
 import { useRouter } from "next/router"
 import { useState } from "react"
+import Navbar from "../components/Navbar";
 
 
 export default function Login() {
@@ -25,6 +26,7 @@ export default function Login() {
 
     return (
         <>
+            <Navbar />
             <div>
                 <label>Username:</label>
                 <input onChange={(e) => setUsername(e.target.value)} />

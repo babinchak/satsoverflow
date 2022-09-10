@@ -97,3 +97,16 @@ func (server *Server) Login(c *gin.Context) {
 	// })
 
 }
+
+func (server *Server) Logout(c *gin.Context) {
+	session, err := server.Store.Get(c.Request, "sessionID")
+	if err != nil {
+		log.Fatalf("Error getting session: %v\n", err)
+	}
+	delete(session.Values, "username")
+	// session.Options.Secure = true
+	err = session.Save(c.Request, c.Writer)
+	if err != nil {
+		log.Fatalf("Error saving session: %v\n", err)
+	}
+}
