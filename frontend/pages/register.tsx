@@ -1,9 +1,11 @@
 import { useState } from "react"
-
+import { useRouter } from "next/router"
+import { StatusCodes } from "http-status-codes"
 
 export default function Register() {
-    const [email, setEmail] = useState('')
-    const [password, setPassword] = useState('')
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const router = useRouter();
 
     async function submitRegister() {
         const response = await fetch('/api/register', {
@@ -14,6 +16,10 @@ export default function Register() {
                 'password': password
             })
         })
+
+        if (response.status == StatusCodes.OK) {
+            router.push("/login")
+        }
     }
 
     return (

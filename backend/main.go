@@ -264,9 +264,9 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error saving session: %v\n", err)
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"message": user.Email,
-		})
+		// c.JSON(http.StatusOK, gin.H{
+		// 	"message": user.Email,
+		// })
 
 	})
 

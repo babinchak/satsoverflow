@@ -1,9 +1,12 @@
+import { StatusCodes } from "http-status-codes";
+import { useRouter } from "next/router"
 import { useState } from "react"
 
 
 export default function Login() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const router = useRouter();
 
     async function submitLogin() {
         const response = await fetch('/api/login', {
@@ -14,6 +17,10 @@ export default function Login() {
                 'password': password
             })
         })
+
+        if (response.status == StatusCodes.OK) {
+            router.push("/")
+        }
     }
 
     return (
