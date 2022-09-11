@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"example.com/satsoverflow-backend/models"
 	"github.com/gin-gonic/gin"
+	"github.com/lightninglabs/lndclient"
 	"github.com/lightningnetwork/lnd/channeldb"
+	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/invoicesrpc"
 	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwire"
@@ -81,4 +84,79 @@ func (server *Server) AddFunds(c *gin.Context) {
 		"payment_request": payaddr,
 		"hash":            hash.String(),
 	})
+}
+
+func (server *Server) WithdrawalFunds(c *gin.Context) {
+	// Get PaymentRequest from body
+	type WithdrawalInput struct {
+		PaymentRequest string `json:"payment_request" binding:"required"`
+	}
+	input := WithdrawalInput{}
+	if err := c.BindJSON(&input); err != nil {
+		log.Println("Hit here")
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	// Decode payment request so we can get its value
+	paymentRequest, err := server.LndServices.Client.DecodePaymentRequest(c.Request.Context(), input.PaymentRequest)
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	// Get user balance
+	session, err := server.Store.Get(c.Request, "sessionID")
+	if err != nil {
+		log.Fatalf("Error getting session: %v\n", err)
+	}
+	username, found := session.Values["username"].(string)
+	if !found {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Please log in"})
+		return
+	}
+	var user models.User
+	server.DB.Where("username = ?", username).First(&user)
+
+	// Check that user doesn't withdrawal more than their balance
+	if user.Balance < uint(paymentRequest.Value.ToSatoshis()) {
+		c.Status(http.StatusForbidden)
+		return
+		// User doesn't have enough to withdrawal
+	}
+
+	// Send payment
+	sendPaymentRequest := lndclient.SendPaymentRequest{Invoice: input.PaymentRequest, Timeout: time.Minute * 10}
+	statuses, errs, err := server.LndServices.Router.SendPayment(c.Request.Context(), sendPaymentRequest)
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		log.Printf("Error setting up send payment: %v\n", err)
+		return
+	}
+	for {
+		select {
+		case err = <-errs:
+			if err != nil {
+				c.Status(http.StatusInternalServerError)
+				log.Printf("Error in send payment error channel: %v\n", err)
+			}
+		case status := <-statuses:
+			if status.State == lnrpc.Payment_SUCCEEDED {
+				// conn.WriteMessage(websocket.TextMessage, []byte("Settled"))
+				c.JSON(http.StatusOK, gin.H{
+					"status": "succeeded",
+				})
+
+				server.DB.Model(&models.User{}).Where("username = ?", user.Username).Update("balance", user.Balance-uint(paymentRequest.Value.ToSatoshis()))
+				return
+			} else if status.State == lnrpc.Payment_FAILED {
+				c.JSON(http.StatusOK, gin.H{
+					"status": "failed",
+				})
+			}
+		case <-c.Request.Context().Done():
+			fmt.Printf("Closing channel while in select")
+			return
+		}
+	}
 }

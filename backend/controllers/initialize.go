@@ -112,6 +112,7 @@ func (server *Server) subscribeInvoicesDaemon() {
 					var user models.User
 					server.DB.Where("username = ?", invoice.Username).First(&user)
 					server.DB.Model(&models.User{}).Where("username = ?", invoice.Username).Update("balance", user.Balance+newBounty)
+					server.DB.Model(&models.Invoice{}).Where("hash = ?", hash).Update("paid", true)
 					fmt.Println("Updated balance!")
 				}
 			}

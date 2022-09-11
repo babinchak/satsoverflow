@@ -13,6 +13,7 @@ export default function Profile() {
     const [sats, setSats] = useState('')
     const [openModal, setOpenModal] = useState(false)
     const [invoiceHash, setInvoiceHash] = useState('')
+    const [paymentRequest, setPaymentRequest] = useState('')
     const router = useRouter();
 
     useEffect(() => {
@@ -58,6 +59,21 @@ export default function Profile() {
         })
     }
 
+    async function withdrawalFunds() {
+        const body = { "payment_request": paymentRequest }
+        const response = await fetch('/api/withdrawal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        })
+        if (response.status == StatusCodes.OK) {
+            response.json().then((data) => {
+                console.log("status: ", data.status)
+                window.location.reload()
+            })
+        }
+    }
+
     return (
         <>
             <Navbar />
@@ -67,8 +83,9 @@ export default function Profile() {
             <div>Created: {createdDate}</div>
             <div>Balance: {balance}</div>
             <button onClick={addFunds}>Add Funds</button>
-            <button>Withdrawal Funds</button>
             <input type="number" min={0} defaultValue={0} onChange={(e) => { setSats(e.target.value) }}></input>
+            <button onClick={withdrawalFunds}>Withdrawal Funds</button>
+            <input placeholder="paste invoice" onChange={(e) => { setPaymentRequest(e.target.value) }}></input>
         </>
     )
 }

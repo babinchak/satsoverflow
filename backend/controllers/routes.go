@@ -14,6 +14,7 @@ func (s *Server) initializeRoutes() {
 
 	s.Router.GET("/api/waitInvoicePaid", s.WaitInvoicePaid)
 	s.Router.POST("/api/deposit", s.AddFunds)
+	s.Router.POST("/api/withdrawal", s.WithdrawalFunds)
 
 	s.Router.GET("/api/profile", s.GetProfile)
 }
