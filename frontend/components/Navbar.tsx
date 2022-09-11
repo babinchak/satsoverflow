@@ -18,7 +18,7 @@ export default function Navbar() {
     const [username, setUsername] = useState('')
     useEffect(() => {
         async function getSessionDetails() {
-            const response = await fetch('/api/session')
+            const response = await fetch('/api/profile')
             if (response.status == StatusCodes.OK) {
                 response.json().then((data) => {
                     setUsername(data.username)
@@ -40,7 +40,7 @@ export default function Navbar() {
                     </>
                 }
                 {username.length == 0 && <Link href='/login'>Login</Link>}
-                <Link href="/session">Session</Link>
+                <Link href="/profile">Profile</Link>
             </header>
         </>
     )

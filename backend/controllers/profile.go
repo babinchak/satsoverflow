@@ -10,6 +10,28 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func (server *Server) GetProfile(c *gin.Context) {
+	session, err := server.Store.Get(c.Request, "sessionID")
+	if err != nil {
+		log.Fatalf("Error getting session: %v\n", err)
+	}
+	username, found := session.Values["username"]
+	if !found {
+		fmt.Printf("Not found\n")
+		// c.AbortWithStatus(http.StatusNotFound)
+		c.Status(http.StatusNotFound)
+		return
+	}
+	var user models.User
+	server.DB.Where("username = ?", username).First(&user)
+	c.JSON(http.StatusOK, gin.H{
+		"username":    username,
+		"email":       user.Email,
+		"createdDate": user.CreatedAt.String(),
+		"balance":     user.Balance,
+	})
+}
+
 func (server *Server) Register(c *gin.Context) {
 	type RegisterInput struct {
 		Username string `json:"username" binding:"required"`
@@ -27,7 +49,7 @@ func (server *Server) Register(c *gin.Context) {
 	fmt.Printf("Email = %s\n", input.Email)
 	bytes, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 14)
 
-	newUser := models.User{Username: input.Username, Email: input.Email, Password: string(bytes)}
+	newUser := models.User{Username: input.Username, Email: input.Email, Password: string(bytes), Balance: 0}
 	result := server.DB.Create(&newUser)
 	log.Println("Error:", result.Error, ", rows:", result.RowsAffected)
 	// session, err := store.Get(c.Request, "sessionID")

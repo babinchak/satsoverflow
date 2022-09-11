@@ -34,6 +34,7 @@ func (server *Server) Initialize() {
 		log.Fatalf("Yay")
 	}
 	server.DB.AutoMigrate(&models.User{}, &models.Question{}, &models.Answer{})
+	server.DB.AutoMigrate(&models.Invoice{})
 
 	// Initialize redis session store
 	server.Store, err = redistore.NewRediStore(10, "tcp", "localhost:6379", "", []byte("secret-key"))
@@ -98,7 +99,21 @@ func (server *Server) subscribeInvoicesDaemon() {
 			fmt.Printf("Invoice state: %s\nInvoice memo: %s\n", invoice.State.String(), invoice.Memo)
 			if invoice.State == channeldb.ContractSettled {
 				hash := invoice.Hash.String()
-				server.DB.Model(&models.Question{}).Where("hash = ?", hash).Update("paid", true)
+				// Set bounty to the actual amount paid
+				newBounty := uint(invoice.AmountPaid.ToSatoshis())
+
+				// For paying for a question without an account
+				server.DB.Model(&models.Question{}).Where("hash = ?", hash).Updates(models.Question{Paid: true, Bounty: newBounty})
+
+				// For adding funds to account
+				var invoice models.Invoice
+				res := server.DB.Where("hash = ?", hash).First(&invoice)
+				if res.RowsAffected == 1 {
+					var user models.User
+					server.DB.Where("username = ?", invoice.Username).First(&user)
+					server.DB.Model(&models.User{}).Where("username = ?", invoice.Username).Update("balance", user.Balance+newBounty)
+					fmt.Println("Updated balance!")
+				}
 			}
 		case err := <-errs:
 			fmt.Printf("Error in subscribe invoices stream: %v\n", err)
