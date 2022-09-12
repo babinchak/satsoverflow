@@ -9,8 +9,9 @@ type User struct {
 	Username string `gorm:"primaryKey"`
 	Email    string
 	// Age          uint8
-	Password string
-	Balance  uint
+	Password      string
+	Balance       uint
+	TwitterHandle string
 	// MemberNumber sql.NullString
 	// ActivatedAt  sql.NullTime
 	CreatedAt time.Time

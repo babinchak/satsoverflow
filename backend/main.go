@@ -1,6 +1,11 @@
 package main
 
-import "example.com/satsoverflow-backend/controllers"
+import (
+	"log"
+
+	"example.com/satsoverflow-backend/controllers"
+	"github.com/joho/godotenv"
+)
 
 const INVOICE_EXPIRY_SECS = 600
 
@@ -135,6 +140,10 @@ const INVOICE_EXPIRY_SECS = 600
 
 func main() {
 
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v\n", err)
+	}
 	server := controllers.Server{}
 	server.Initialize()
 	defer server.Close()

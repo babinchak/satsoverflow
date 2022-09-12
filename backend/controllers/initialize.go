@@ -45,10 +45,10 @@ func (server *Server) Initialize() {
 
 	// Initialize Lnd GRPC services
 	lndcfg := lndclient.LndServicesConfig{
-		LndAddress:  "192.168.68.54:10009",
-		Network:     "mainnet",
-		MacaroonDir: "invoicer",
-		TLSPath:     "invoicer/tls.cert",
+		LndAddress:         "lightrunner-voltage.m.voltageapp.io:10009",
+		Network:            "mainnet",
+		CustomMacaroonPath: "invoicer/voltage/admin.macaroon",
+		TLSPath:            "invoicer/voltage/tls.cert",
 	}
 
 	server.LndServices, err = lndclient.NewLndServices(&lndcfg)

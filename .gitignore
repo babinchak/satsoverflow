@@ -38,3 +38,5 @@ next-env.d.ts
 # backend stuff
 *.macaroon
 *.cert
+*twitter.txt
+backend/.env

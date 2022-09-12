@@ -29,6 +29,7 @@ func (server *Server) GetProfile(c *gin.Context) {
 		"email":       user.Email,
 		"createdDate": user.CreatedAt.String(),
 		"balance":     user.Balance,
+		"twitter":     user.TwitterHandle,
 	})
 }
 

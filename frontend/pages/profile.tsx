@@ -14,6 +14,7 @@ export default function Profile() {
     const [openModal, setOpenModal] = useState(false)
     const [invoiceHash, setInvoiceHash] = useState('')
     const [paymentRequest, setPaymentRequest] = useState('')
+    const [twitterHandle, setTwitterHandle] = useState('')
     const router = useRouter();
 
     useEffect(() => {
@@ -25,6 +26,7 @@ export default function Profile() {
                     setEmail(data.email)
                     setCreatedDate(data.createdDate)
                     setBalance(data.balance)
+                    setTwitterHandle(data.twitter)
                 })
             } else {
                 router.push('/login')
@@ -74,6 +76,23 @@ export default function Profile() {
         }
     }
 
+    async function linkTwitter() {
+        router.push("/twitter/login")
+        // const response = await fetch('/api/linkTwitter', {
+        //     method: 'POST'
+        // })
+        // console.log("Link to twitter response: ", response.status)
+        // const response = await fetch('https://api.twitter.com/oauth/request_token?' + new URLSearchParams({
+        //     oauth_callback: 'localhost%3A8080%2Ftwitter'
+        // }), {
+        //     method: 'POST',
+        //     headers: {
+        //         ''
+        //     }
+        // }
+        // )
+    }
+
     return (
         <>
             <Navbar />
@@ -86,6 +105,10 @@ export default function Profile() {
             <input type="number" min={0} defaultValue={0} onChange={(e) => { setSats(e.target.value) }}></input>
             <button onClick={withdrawalFunds}>Withdrawal Funds</button>
             <input placeholder="paste invoice" onChange={(e) => { setPaymentRequest(e.target.value) }}></input>
+            <button onClick={linkTwitter}>Link Twitter Account</button>
+            <div>
+                Twitter handle: @{twitterHandle}
+            </div>
         </>
     )
 }
